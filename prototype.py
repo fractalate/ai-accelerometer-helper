@@ -9,29 +9,26 @@ NUM_SAMPLES = 256  # Per second.
 
 # Loads samples and associated labels. Translates time instances into the evenly spaced
 # samples.
-def load_samples_full(file_path: str, file_metadata_path: str):
-    with open(file_metadata_path, 'r') as fin:
-        metadata = json.loads(fin.read())
-    rax,ray,raz = metadata['true_accelerometer_reading']
-    rgx,rgy,rgz = metadata['true_gyroscope_reading']
-    rmx,rmy,rmz = metadata['true_compass_reading']
-
+def load_samples_full(target_path: str, noisy_path: str):
     # t,ax,ay,az,gx,gy,gz,mx,my,mz
-    df = pd.read_csv(file_path)
-    t0 = df.iloc[0, 0]
+    df_noisy = pd.read_csv(noisy_path)
+    df_target = pd.read_csv(target_path)
+    t0 = df_target.iloc[0, 0]
 
     data = []
     labels = []
-    for _, row in df.iterrows():
-        t,ax,ay,az,gx,gy,gz,mx,my,mz = row
+    for (_, row_target), (_, row_noisy) in zip(df_target.iterrows(), df_noisy.iterrows()):
+        t = row_target.iloc[0]
         which_second = np.floor(t - t0)
         which_subsample_of_second = ((t - t0) - np.floor(t - t0)) * NUM_SAMPLES
         which_sample = which_second * NUM_SAMPLES + which_subsample_of_second
         while len(data) < which_sample:
             data.append(data[-1])
             labels.append(labels[-1])
+        _,ax,ay,az,gx,gy,gz,mx,my,mz = row_noisy
         data.append([ax,ay,az,gx,gy,gz,mx,my,mz])
-        labels.append([rax,ray,raz,rgx,rgy,rgz,rmx,rmy,rmz])
+        _,ax,ay,az,gx,gy,gz,mx,my,mz = row_target
+        labels.append([ax,ay,az,gx,gy,gz,mx,my,mz])
     return torch.Tensor(data), torch.Tensor(labels)
 
 def create_batches_from_samples(data):
@@ -49,7 +46,7 @@ class SensorDataset(Dataset):
         self.transform = transform
 
         for sample_identifier in sample_identifiers:
-            data, labels = load_samples_full(sample_identifier + '.csv', sample_identifier + '.metadata.json')
+            data, labels = load_samples_full(sample_identifier + '_noisy.csv', sample_identifier + '_target.csv')
             self.data.extend(create_batches_from_samples(data))
             self.labels.extend(create_batches_from_samples(labels))
 
@@ -100,13 +97,14 @@ class NeuralNetwork(nn.Module):
         return x
 
 
-data, labels = load_samples_full('out_000.csv', 'out_000.metadata.json')
-datas = create_batches_from_samples(data)
-print(datas[0].shape)
-print(len(datas))
-
-training_data = SensorDataset(['out_000', 'out_001'])
-test_data = SensorDataset(['out_002'])
+training_items = []
+for i in range(0, 80):
+    training_items.append(f'data/out_{i:03d}')
+test_items = []
+for i in range(80, 100):
+    test_items.append(f'data/out_{i:03d}')
+training_data = SensorDataset(training_items)
+test_data = SensorDataset(test_items)
 
 batch_size = 64
 train_dataloader = DataLoader(training_data, batch_size=batch_size)
