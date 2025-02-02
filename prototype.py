@@ -98,10 +98,10 @@ class NeuralNetwork(nn.Module):
 
 
 training_items = []
-for i in range(0, 80):
+for i in range(0, 800):
     training_items.append(f'data/out_{i:03d}')
 test_items = []
-for i in range(80, 100):
+for i in range(800, 1000):
     test_items.append(f'data/out_{i:03d}')
 training_data = SensorDataset(training_items)
 test_data = SensorDataset(test_items)
@@ -157,7 +157,7 @@ def test(dataloader, model: NeuralNetwork, loss_fn):
     test_loss /= num_batches
     print(f"Test Error: Avg loss: {test_loss:>8f} \n")
 
-epochs = 5
+epochs = 200
 for t in range(epochs):
     print(f"Epoch {t+1}\n-------------------------------")
     train(train_dataloader, model, loss_fn, optimizer)
